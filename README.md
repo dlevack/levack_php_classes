@@ -1,6 +1,12 @@
 levack_php_classes
-============
+==================
 This is a group of PHP class files designed to simplify common scripting tasks.
+
+
+Documentation
+-------------
+
+http://phpdoc.levack.net/levack_php_classes
 
 
 Yum Repository

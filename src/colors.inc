@@ -6,7 +6,7 @@
  * color of text outpot for CLI scripts.
  * 
  * @author Dan Levack <dan@levack.net>
- * @version 1.0
+ * @version 1.1
  */
 
 /**

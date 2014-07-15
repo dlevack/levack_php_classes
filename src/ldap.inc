@@ -6,8 +6,10 @@
  * authentication.
  * 
  * @author Dan Levack <dan@levack.net>
- * @version 1.0
+ * @version 1.1
  */
+
+require('ini_files.inc');
 
 /**
  * Provides authentication through Active Directory
@@ -26,9 +28,14 @@ class ldap_auth {
   public $TYPE = 1;
   
   /**
-   * @var string $DOMAIN The domain of the server AD (example) OpenLDAP (dc=example,dc=com)
+   * @var string $BASE_DN The base DN for the server
    */
-  public $DOMAIN;
+  public $BASE_DN;
+  
+  /**
+   * @var string $USERS_DN The user DN for the server
+   */
+  public $USERS_DN;
   
   /**
    * @var handler $CONN LDAP connection handler
@@ -41,21 +48,32 @@ class ldap_auth {
   public $BIND;
   
   /**
+   * @var string $BIND_USER User to use to bind
+   */
+  private $BIND_USER;
+  
+  /**
+   * @var string $BIND_PASS Password to use to bind
+   */
+  private $BIND_PASS;
+  
+  /**
    * Conctructor method, called when class is called.
    *
    * The constructor will set the HOST variable, connect to the
    * host and set a few LDAP options.
    * 
-   * @param string $host   Host to connect to (dc01.example.com)
-   * @param string $domain Domain for server (dc=example,dc=com)
-   * @param int    $type   Type of LDAP server 1 = AD 2 = OpenLDAP
+   * @param string $ini Path to INI file
    */
-  public function __construct($host   = '',
-			      $domain = '',
-			      $type   = 1) {
-    $this->HOST   = $host;
-    $this->DOMAIN = $domain;
-    $this->TYPE   = $type;
+  public function __construct($ini = '') {
+    $config          = new ini_files($ini);
+    $this->HOST      = $config->CONFIG['host'];
+    $this->BASE_DN   = $config->CONFIG['base_dn'];
+    $this->USERS_DN  = $config->CONFIG['users_dn'].','.$this->BASE_DN;
+    $this->TYPE      = $config->CONFIG['type'];
+    $this->BIND_USER = $config->CONFIG['bind_user'];
+    $this->BIND_PASS = $config->CONFIG['bind_pass'];
+    unset($config);
     $this->connect();
     ldap_set_option($this->CONN,
 		    LDAP_OPT_PROTOCOL_VERSION,
@@ -63,6 +81,7 @@ class ldap_auth {
     ldap_set_option($this->CONN,
 		    LDAP_OPT_REFERRALS,
 		    0);
+    $this->bind();
     return;
   }
   
@@ -76,22 +95,45 @@ class ldap_auth {
   
   /**
    * Bind to the host using supplied cradentials
-   *
-   * @param string $user User name to bind with (jdow)
-   * @param string $pass Password to bind with (password)
-   * @return bool        TRUE if authenticated FALSE if not
+   * 
+   * @return bool TRUE if authenticated FALSE if not
    */
-  public function bind($user = '',
-		       $pass = '') {
+  public function bind() {
     $this->BIND = @ldap_bind($this->CONN,
-                             $this->get_dn_of_user($user),
-                             $pass);
+                             $this->BIND_USER,
+                             $this->BIND_PASS);
     if ($this->BIND) {
       return TRUE;
     } else {
       return FALSE;
     }
     return;
+  }
+  
+  /**
+   * Returns TRUE if authenticated or FALSE if failed
+   *
+   * @param  string $user Username
+   * @param  string $pass password
+   * @return bool         TRUE if authenticated successfully or FALSE if not
+   */
+  public function auth($user = '',
+		       $pass = '') {
+    if ($user == '') {
+      return FALSE;
+    }
+    if ($pass == '') {
+      return FALSE;
+    }
+    $auth = TRUE;
+    @ldap_bind($this->CONN,
+	       $this->get_dn_of_user($user),
+	       $pass) or $auth = FALSE;
+    if ($auth) {
+      return TRUE;
+    } else {
+      return FALSE;
+    }
   }
   
   /**
@@ -110,12 +152,14 @@ class ldap_auth {
     $justthese = array("dn");
     
     $sr = ldap_search($this->CONN,
-		      $this->DOMAIN,
+		      $this->USERS_DN,
 		      $filter,
 		      $justthese);
     $info = ldap_get_entries($this->CONN,
 			     $sr);
-    $dn   = $info[0]['dn'];
+    if (isset($info[0]['dn'])) {
+      $dn   = $info[0]['dn'];
+    }
     unset($justthese);
     unset($filter);
     return($dn);

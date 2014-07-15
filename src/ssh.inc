@@ -97,17 +97,97 @@ class ssh_conn {
   }
   
   /**
-   * Returns an array of data showing the disk space information
-   * provided by the 'df -h' (Human Readable) command.
+   * Returns an array of data showing uptime information
    *
-   * @return array $df Disk space information
+   * @return array $uptime Uptime information
    */
-  public function get_df() {
+  public function get_uptime() {
+    $uptime = array();
+    
+    // Run the 'uptime' command on remote host
+    $data = $this->cmd('uptime');
+    $x = explode(',', $data[0]);
+    $y = explode(' ', $x[0]);
+    $uptime['uptime'] = $y[1].' '.$y[2].' '.$y[3].' '.$y[4].', '.trim($x[1]);
+    unset($y);
+    $uptime['users']  = trim($x[2]);
+    $y = explode(': ',
+		 $x[3]);
+    $uptime['load']['current'] = trim($y[1]);
+    unset($y);
+    $uptime['load']['5 min']   = trim($x[4]);
+    $uptime['load']['15 min']  = trim($x[5]);
+    
+    unset($data);
+    return($uptime);
+  }
+  
+  /**
+   * Returns an array of data showing memory usage information
+   * provided by the 'free' command.
+   *
+   * @param  string $option Option to pass to df command
+   * @return array  $free   Memory usage information
+   */
+  public function get_free($option = '') {
+    $free = array();
+    
+    // Run the 'free' command on remote host
+    $data = $this->cmd('free '.$option);
+    
+    // Build an array of the column headings
+    foreach (explode(' ',$data[0]) as $k=>$v) {
+      if ($v != '') {
+	$head[] = $v;
+      }
+    }
+    
+    // Parse the Mem line
+    $x = 0;
+    foreach (explode(' ',$data[1]) as $k=>$v) {
+      if ($v != '' and
+	  $v != 'Mem:') {
+	$free['Mem'][$head[$x]] = $v;
+	$x++;
+      }
+    }
+    // Parse the Buffers line
+    $x = 1;
+    foreach (explode(' ',$data[2]) as $k=>$v) {
+      if ($v != ''    and
+      $v != '-/+' and
+	  $v != 'buffers/cache:') {
+	$free['buffers/cache'][$head[$x]] = $v;
+	$x++;
+      }
+    }
+    // Parse the Swap line    
+    $x = 0;
+    foreach (explode(' ',$data[3]) as $k=>$v) {
+      if ($v != '' and
+	  $v != 'Swap:') {
+	$free['Swap'][$head[$x]] = $v;
+	$x++;
+      }
+    }
+
+    unset($data);
+    return($free);
+  }
+  
+  /**
+   * Returns an array of data showing the disk space information
+   * provided by the 'df' command.
+   *
+   * @param  string $option Option to pass to df command
+   * @return array  $df     Disk space information
+   */
+  public function get_df($option = '-h') {
     $df      = array();
     $headers = array();
     
-    // Run the 'df -h' command on remote host
-    $data    = $this->cmd('df -h');
+    // Run the 'df' command on remote host
+    $data    = $this->cmd('df '.$option);
     
     // Build an array of the column headings
     foreach (explode(' ', $data[0]) as $k=>$v) {

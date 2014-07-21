@@ -9,8 +9,6 @@
  * @version 1.1
  */
 
-require('ini_files.inc');
-
 /**
  * Provides authentication through Active Directory
  */
@@ -36,6 +34,11 @@ class ldap_auth {
    * @var string $USERS_DN The user DN for the server
    */
   public $USERS_DN;
+  
+  /**
+   * @var string $GROUPS_DN The group DN for the server
+   */
+  public $GROUPS_DN;
   
   /**
    * @var handler $CONN LDAP connection handler
@@ -66,10 +69,13 @@ class ldap_auth {
    * @param string $ini Path to INI file
    */
   public function __construct($ini = '') {
+    require_once('ini_files.inc');
+  
     $config          = new ini_files($ini);
     $this->HOST      = $config->CONFIG['host'];
     $this->BASE_DN   = $config->CONFIG['base_dn'];
     $this->USERS_DN  = $config->CONFIG['users_dn'].','.$this->BASE_DN;
+    $this->GROUPS_DN = $config->CONFIG['groups_dn'].','.$this->BASE_DN;
     $this->TYPE      = $config->CONFIG['type'];
     $this->BIND_USER = $config->CONFIG['bind_user'];
     $this->BIND_PASS = $config->CONFIG['bind_pass'];
@@ -163,6 +169,134 @@ class ldap_auth {
     unset($justthese);
     unset($filter);
     return($dn);
+  }
+  
+  /**
+   * Returns array of user information
+   * 
+   * @param  string $user User name
+   * @return array  $info Array of user information
+   */
+  public function get_user_info($user) {
+    $info = array();
+    if ($this->TYPE == 1) {
+      $filter    = "(sAMAccountName=".$user.")";
+      $justthese = array("dn",
+			 "cn",
+			 "sAMAccountName",
+			 "mail",
+			 "memberof");
+    } else {
+      $filter    = "(uid=".$user.")";
+      $justthese = array("dn",
+                         "cn",
+			 "uid",
+                         "mail",
+                         "memberof");
+    }
+    $sr = ldap_search($this->CONN,
+                      $this->USERS_DN,
+                      $filter,
+    		      $justthese);
+    $data = ldap_get_entries($this->CONN,
+                             $sr);
+    if (isset($data[0]['dn'])) {
+      $info['dn'] = $data[0]['dn'];
+    }
+    if (isset($data[0]['cn'])) {
+      $info['cn'] = $data[0]['cn'][0];
+    }
+    if ($this->TYPE == 1) {
+      if (isset($data[0]['dn'])) {
+        $info['samaccountname'] = $data[0]['samaccountname'][0];
+      }
+    } else {
+      if (isset($data[0]['uid'])) {
+	$info['uid'] = $data[0]['uid'][0];
+      }
+    }
+    if (isset($data[0]['mail'])) {
+      foreach ($data[0]['mail'] as $k=>$v) {
+	if (preg_match('/@/',
+		       $v)) {
+	  $info['mail'][] = $v;
+	}
+      }
+    }
+    if ($this->TYPE == 1) {
+      if (isset($data[0]['memberof'])) {
+	foreach ($data[0]['memberof'] as $k=>$v) {
+	  if (preg_match('/=/',
+			 $v)) {
+	    $info['memberof'][] = $v;
+	  }
+	}
+      }
+    } else {
+      foreach ($this->get_group_list() as $k=>$v) {
+	if ($this->is_user_member($info['dn'],
+				  $v)) {
+	  $info['memberof'][] = 'cn='.$v.','.$this->GROUPS_DN;
+	}
+      }
+    }
+    
+    unset($justthese);
+    unset($filter);
+    return($info);
+  }
+  
+  /**
+   * Returns array of group names
+   * 
+   * @return array $groups Array of group names
+   */
+  public function get_group_list() {
+    $groups = array();
+    $filter = "cn=*";
+    $sr = ldap_search($this->CONN,
+                      $this->GROUPS_DN,
+                      $filter);
+    $info = ldap_get_entries($this->CONN,
+                             $sr);
+    foreach ($info as $k=>$v) {
+      if (isset($v['cn'])) {
+	$groups[] = $v['cn'][0];
+      }
+    }
+    unset($filter);
+    return($groups);
+  }
+  
+  /**
+   * Returns TRUE if user is a member of group and FALSE if not
+   * 
+   * @param  string $user_dn  Username to check
+   * @param  string $group_cn CN of group to check
+   * @return bool             TRUE if user is a member of group and FALSE if not
+   */
+  public function is_user_member($user_dn,
+				 $group_cn) {
+    $filter = "cn=".$group_cn;
+    $justthese = array("member");
+    
+    $sr = ldap_search($this->CONN,
+                      $this->GROUPS_DN,
+                      $filter,
+		      $justthese);
+    $info = ldap_get_entries($this->CONN,
+                             $sr);
+    
+    foreach ($info[0]['member'] as $k=>$v) {
+      if ($v == $user_dn) {
+	unset($justthese);
+	unset($filter);
+	return TRUE;
+      }
+    }
+    unset($justthese);
+    unset($filter);
+    return FALSE;
   }
   
   /**

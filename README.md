@@ -19,8 +19,8 @@ rpm -ihv http://yum.levack.net/levack/levack_repo-1.0-1.noarch.rpm
 
 File List
 ---------
-- colors.php    - Provides methods for changing foreground and backgroung colors for CLI scripts.
-- db.php        - Provides methods for using MySQL databases.
-- ini_files.php - Provides methods for reading and writing INI files.
-- ldap.php      - Provides methods for authenticating against AD/Openldap servers.
-- ssh.php       - Provides methods for using SSH from scripts.
+- colors.inc    - Provides methods for changing foreground and backgroung colors for CLI scripts.
+- db.inc        - Provides methods for using MySQL databases.
+- ini_files.inc - Provides methods for reading and writing INI files.
+- ldap.inc      - Provides methods for authenticating against AD/Openldap servers.
+- ssh.inc       - Provides methods for using SSH from scripts.
